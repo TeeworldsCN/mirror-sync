@@ -128,8 +128,13 @@ const job = async () => {
   console.log('Job finished');
 };
 
-job().catch(reason => {
-  console.error('process failed');
-  console.error(reason);
-  process.exit(1);
-});
+job()
+  .catch(reason => {
+    console.error('process failed');
+    console.error(reason);
+    process.exit(1);
+  })
+  .then(() => {
+    process.exit(0);
+    console.log('Job quit');
+  });
