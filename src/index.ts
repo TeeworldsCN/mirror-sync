@@ -102,6 +102,7 @@ const job = async () => {
           Key: map.filename,
           FilePath: `./tmp/${map.filename}`,
         });
+        console.log(' - Uploaded');
         bucketMaps[map.filename] = new Date().toISOString();
       } catch (e) {
         console.log(' - Upload failed');
@@ -114,6 +115,17 @@ const job = async () => {
   }
 
   console.log('Sync finished');
+  console.log('Cleaning temp files');
+
+  for (let map of missingMaps) {
+    try {
+      fs.unlinkSync(`./tmp/${map.filename}`);
+    } catch {
+      console.log(` - Failed to remove file ${map.filename}`);
+    }
+  }
+
+  console.log('Job finished');
 };
 
 job().catch(reason => {
