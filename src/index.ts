@@ -15,7 +15,7 @@ const download = async (map: any) => {
     responseType: 'stream',
   });
 
-  response.data.pipe(fs.createWriteStream(`tmp/${map.filename}`));
+  response.data.pipe(fs.createWriteStream(`${process.env.TWCN_SYNC_PATH}/${map.filename}`));
 
   return new Promise<void>((resolve, reject) => {
     response.data.on('end', () => {
@@ -100,7 +100,7 @@ const job = async () => {
           Bucket: process.env.COS_MAP_BUCKET,
           Region: process.env.COS_REGION,
           Key: map.filename,
-          FilePath: `./tmp/${map.filename}`,
+          FilePath: `${process.env.TWCN_SYNC_PATH}/${map.filename}`,
         });
         console.log(' - Uploaded');
         bucketMaps[map.filename] = new Date().toISOString();
@@ -119,7 +119,7 @@ const job = async () => {
 
   for (let map of missingMaps) {
     try {
-      fs.unlinkSync(`./tmp/${map.filename}`);
+      fs.unlinkSync(`${process.env.TWCN_SYNC_PATH}/${map.filename}`);
     } catch {
       console.log(` - Failed to remove file ${map.filename}`);
     }
