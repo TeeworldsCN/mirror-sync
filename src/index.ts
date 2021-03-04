@@ -145,8 +145,8 @@ const job = async () => {
 
   list.sort(([_a, a], [_b, b]) => (a.date == b.date ? 0 : a.date > b.date ? -1 : 1));
 
-  let site = '<html><head><title>ddnet map mirror</title></head><body>';
-  site += `<h1>ddnet map mirror</h1><p>last sync: ${new Date().toISOString()}</p><hr><pre>`;
+  let site = '<html><head><meta charset="utf-8" /><title>DDNet地图镜像</title></head><body>';
+  site += `<h1>DDNet地图镜像</h1><p>上次同步时间: ${new Date().toLocaleString()}</p><hr><pre>`;
   for (let [file, data] of list) {
     const name = file.slice(0, 50);
     const size = pb(data.size);
