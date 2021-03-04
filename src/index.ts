@@ -90,7 +90,7 @@ const job = async () => {
     for (let map of missingMaps) {
       console.log(`Downloading map: ${map.filename}`);
       try {
-        download(map);
+        await download(map);
         console.log(' - Downloaded');
       } catch {
         console.log(' - Download failed');
