@@ -237,7 +237,7 @@ const jobFs = async () => {
     console.log(`Prepare to upload ${missingMaps.length} items`);
 
     for (let map of missingMaps) {
-      console.log(' - Validating');
+      console.log(` - Validating map: ${map.filename}`);
       if (!checkFile(`${process.env.TWCN_MAP_SOURCE_PATH}/${map.filename}`)) {
         console.warn(` - Map ${map.filename} can not be validated`);
         continue;
