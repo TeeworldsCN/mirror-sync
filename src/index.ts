@@ -92,8 +92,9 @@ const job = async () => {
       try {
         await download(map);
         console.log(' - Downloaded');
-      } catch {
-        console.log(' - Download failed');
+      } catch (e) {
+        console.error(' - Download failed');
+        console.error(e);
         continue;
       }
 
@@ -107,8 +108,8 @@ const job = async () => {
         console.log(' - Uploaded');
         bucketMaps[map.filename] = new Date().toISOString();
       } catch (e) {
-        console.log(' - Upload failed');
-        console.log(e);
+        console.error(' - Upload failed');
+        console.error(e);
         return;
       }
     }
@@ -123,7 +124,7 @@ const job = async () => {
     try {
       fs.unlinkSync(`${process.env.TWCN_SYNC_PATH}/${map.filename}`);
     } catch {
-      console.log(` - Failed to remove file ${map.filename}`);
+      console.warn(` - Failed to remove file ${map.filename}`);
     }
   }
 
