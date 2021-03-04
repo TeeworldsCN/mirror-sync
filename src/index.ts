@@ -36,7 +36,7 @@ const download = async (map: any) => {
     responseType: 'stream',
   });
 
-  const path = `${process.env.TWCN_SYNC_PATH}/${map.filename}`;
+  const path = `${process.env.TWCN_TMP_PATH}/${map.filename}`;
   console.log(` - Downloading to ${path}`);
   response.data.pipe(fs.createWriteStream(path));
 
@@ -51,9 +51,7 @@ const download = async (map: any) => {
   });
 };
 
-const job = async () => {
-  console.log('Getting bucket');
-
+const getBucket = async () => {
   const bucketMaps: { [key: string]: { date: string; size: number } } = {};
   let marker: string = undefined;
   let total = 0;
@@ -80,13 +78,17 @@ const job = async () => {
       break;
     }
   }
+  return bucketMaps;
+};
 
-  console.log('Getting map index');
+type SourceJob = (bucketMaps: {
+  [key: string]: { date: string; size: number };
+}) => Promise<{ link: string; filename: string }[]>;
+
+const getMapsFromHttp: SourceJob = async bucketMaps => {
   const mapSource = await axios.get('http://maps.ddnet.tw', { timeout: 60000 });
 
   const missingMaps: { link: string; filename: string }[] = [];
-
-  let indexCount = 0;
   const $ = cheerio.load(mapSource.data);
   $('a').each((_, link) => {
     const href = $(link).attr('href');
@@ -101,13 +103,68 @@ const job = async () => {
 
     if (!filename || !filename.endsWith('.map')) return;
 
-    indexCount += 1;
     if (!(filename in bucketMaps)) {
       missingMaps.push({ link: href, filename });
     }
   });
 
-  console.log(`Index contains ${indexCount} items`);
+  return missingMaps;
+};
+
+const getMapsFromFileSystem: SourceJob = async bucketMaps => {
+  const mapSource = fs.readdirSync(process.env.TWCN_MAP_SOURCE_PATH);
+  const missingMaps: { link: string; filename: string }[] = [];
+  for (let filename of mapSource) {
+    if (!filename || !filename.endsWith('.map')) continue;
+
+    if (!(filename in bucketMaps)) {
+      missingMaps.push({ link: encodeURIComponent(filename), filename });
+    }
+  }
+
+  return missingMaps;
+};
+
+const generateIndex = async (bucketMaps: { [key: string]: { date: string; size: number } }) => {
+  const list: [string, typeof bucketMaps[0]][] = [];
+  for (let key in bucketMaps) {
+    list.push([key, bucketMaps[key]]);
+  }
+
+  list.sort(([_a, a], [_b, b]) => (a.date == b.date ? 0 : a.date > b.date ? -1 : 1));
+
+  let site = '<html><head><meta charset="utf-8" /><title>DDNet地图镜像</title></head><body>';
+  site += `<h1>DDNet地图镜像</h1><p>上次同步时间: ${new Date().toLocaleString()}</p><hr><pre>`;
+  for (let [file, data] of list) {
+    const name = file.slice(0, 50);
+    const size = pb(data.size);
+    site += `<a href="${encodeURIComponent(file)}">${name}</a>`;
+    site += `${''.padEnd(51 - name.length)}${data.date.slice(0, 10)}${size.padStart(14)}<br>`;
+  }
+  site += '</pre></body><html>';
+
+  fs.writeFileSync(`${process.env.TWCN_TMP_PATH}/index.html`, site);
+  console.log('Uploading Index');
+  try {
+    await cos.sliceUploadFile({
+      Bucket: process.env.COS_MAP_BUCKET,
+      Region: process.env.COS_REGION,
+      Key: 'index.html',
+      FilePath: `${process.env.TWCN_TMP_PATH}/index.html`,
+    });
+    console.log(' - Index Uploaded');
+  } catch (e) {
+    console.error(' - Index Upload failed');
+    console.error(e);
+  }
+};
+
+const jobHttp = async () => {
+  console.log('Getting bucket');
+  const bucketMaps = await getBucket();
+
+  console.log('Checking map source');
+  const missingMaps = await getMapsFromHttp(bucketMaps);
 
   if (missingMaps.length > 0) {
     console.log(`Prepare to upload ${missingMaps.length} items`);
@@ -124,18 +181,18 @@ const job = async () => {
       }
 
       console.log(' - Validating');
-      if (!checkFile(`${process.env.TWCN_SYNC_PATH}/${map.filename}`)) {
+      if (!checkFile(`${process.env.TWCN_TMP_PATH}/${map.filename}`)) {
         console.warn(` - Map ${map.filename} can not be validated`);
         continue;
       }
 
       try {
-        const stat = fs.statSync(`${process.env.TWCN_SYNC_PATH}/${map.filename}`);
+        const stat = fs.statSync(`${process.env.TWCN_TMP_PATH}/${map.filename}`);
         await cos.sliceUploadFile({
           Bucket: process.env.COS_MAP_BUCKET,
           Region: process.env.COS_REGION,
           Key: map.filename,
-          FilePath: `${process.env.TWCN_SYNC_PATH}/${map.filename}`,
+          FilePath: `${process.env.TWCN_TMP_PATH}/${map.filename}`,
         });
         console.log(' - Uploaded');
         bucketMaps[map.filename] = {
@@ -157,49 +214,67 @@ const job = async () => {
 
   for (let map of missingMaps) {
     try {
-      fs.unlinkSync(`${process.env.TWCN_SYNC_PATH}/${map.filename}`);
+      fs.unlinkSync(`${process.env.TWCN_TMP_PATH}/${map.filename}`);
     } catch {
       console.warn(` - Failed to remove file ${map.filename}`);
     }
   }
 
   console.log('Generateing index.html');
-  const list: [string, typeof bucketMaps[0]][] = [];
-  for (let key in bucketMaps) {
-    list.push([key, bucketMaps[key]]);
-  }
-
-  list.sort(([_a, a], [_b, b]) => (a.date == b.date ? 0 : a.date > b.date ? -1 : 1));
-
-  let site = '<html><head><meta charset="utf-8" /><title>DDNet地图镜像</title></head><body>';
-  site += `<h1>DDNet地图镜像</h1><p>上次同步时间: ${new Date().toLocaleString()}</p><hr><pre>`;
-  for (let [file, data] of list) {
-    const name = file.slice(0, 50);
-    const size = pb(data.size);
-    site += `<a href="${encodeURIComponent(file)}">${name}</a>`;
-    site += `${''.padEnd(51 - name.length)}${data.date.slice(0, 10)}${size.padStart(14)}<br>`;
-  }
-  site += '</pre></body><html>';
-
-  fs.writeFileSync(`${process.env.TWCN_SYNC_PATH}/index.html`, site);
-  console.log('Uploading Index');
-  try {
-    await cos.sliceUploadFile({
-      Bucket: process.env.COS_MAP_BUCKET,
-      Region: process.env.COS_REGION,
-      Key: 'index.html',
-      FilePath: `${process.env.TWCN_SYNC_PATH}/index.html`,
-    });
-    console.log(' - Index Uploaded');
-  } catch (e) {
-    console.error(' - Index Upload failed');
-    console.error(e);
-  }
+  await generateIndex(bucketMaps);
 
   console.log('Job finished');
 };
 
-job()
+const jobFs = async () => {
+  console.log('Getting bucket');
+  const bucketMaps = await getBucket();
+
+  console.log('Checking map source');
+  const missingMaps = await getMapsFromFileSystem(bucketMaps);
+
+  if (missingMaps.length > 0) {
+    console.log(`Prepare to upload ${missingMaps.length} items`);
+
+    for (let map of missingMaps) {
+      console.log(' - Validating');
+      if (!checkFile(`${process.env.TWCN_MAP_SOURCE_PATH}/${map.filename}`)) {
+        console.warn(` - Map ${map.filename} can not be validated`);
+        continue;
+      }
+
+      try {
+        const stat = fs.statSync(`${process.env.TWCN_MAP_SOURCE_PATH}/${map.filename}`);
+        await cos.sliceUploadFile({
+          Bucket: process.env.COS_MAP_BUCKET,
+          Region: process.env.COS_REGION,
+          Key: map.filename,
+          FilePath: `${process.env.TWCN_MAP_SOURCE_PATH}/${map.filename}`,
+        });
+        console.log(' - Uploaded');
+        bucketMaps[map.filename] = {
+          date: new Date().toISOString(),
+          size: stat.size,
+        };
+      } catch (e) {
+        console.error(' - Upload failed');
+        console.error(e);
+        return;
+      }
+    }
+  } else {
+    console.log('Nothing changed');
+  }
+
+  console.log('Sync finished');
+
+  console.log('Generateing index.html');
+  await generateIndex(bucketMaps);
+
+  console.log('Job finished');
+};
+
+jobFs()
   .catch(reason => {
     console.error('process failed');
     console.error(reason);
