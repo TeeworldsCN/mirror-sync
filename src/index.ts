@@ -2,6 +2,7 @@ import axios from 'axios';
 import cheerio from 'cheerio';
 import COS from 'cos-nodejs-sdk-v5';
 import fs from 'fs';
+import pb from 'pretty-bytes';
 
 require('dotenv').config();
 
@@ -33,7 +34,7 @@ const download = async (map: any) => {
 const job = async () => {
   console.log('Getting bucket');
 
-  const bucketMaps: { [key: string]: string } = {};
+  const bucketMaps: { [key: string]: { date: string; size: number } } = {};
   let marker: string = undefined;
   let total = 0;
   while (true) {
@@ -45,7 +46,11 @@ const job = async () => {
     });
 
     for (let item of bucket.Contents) {
-      bucketMaps[item.Key] = item.LastModified;
+      if (!item.Key.endsWith('.map')) continue;
+      bucketMaps[item.Key] = {
+        date: item.LastModified,
+        size: parseInt(item.Size),
+      };
     }
 
     total += bucket.Contents.length;
@@ -99,6 +104,7 @@ const job = async () => {
       }
 
       try {
+        const stat = fs.statSync(`${process.env.TWCN_SYNC_PATH}/${map.filename}`);
         await cos.sliceUploadFile({
           Bucket: process.env.COS_MAP_BUCKET,
           Region: process.env.COS_REGION,
@@ -106,7 +112,10 @@ const job = async () => {
           FilePath: `${process.env.TWCN_SYNC_PATH}/${map.filename}`,
         });
         console.log(' - Uploaded');
-        bucketMaps[map.filename] = new Date().toISOString();
+        bucketMaps[map.filename] = {
+          date: new Date().toISOString(),
+          size: stat.size,
+        };
       } catch (e) {
         console.error(' - Upload failed');
         console.error(e);
@@ -126,6 +135,39 @@ const job = async () => {
     } catch {
       console.warn(` - Failed to remove file ${map.filename}`);
     }
+  }
+
+  console.log('Generateing index.html');
+  const list: [string, typeof bucketMaps[0]][] = [];
+  for (let key in bucketMaps) {
+    list.push([key, bucketMaps[key]]);
+  }
+
+  list.sort(([_a, a], [_b, b]) => (a.date == b.date ? 0 : a.date > b.date ? -1 : 1));
+
+  let site = '<html><head><title>ddnet map mirror</title></head><body>';
+  site += `<h1>ddnet map mirror</h1><p>last sync: ${new Date().toISOString()}</p><hr><pre>`;
+  for (let [file, data] of list) {
+    const name = file.slice(0, 50);
+    const size = pb(data.size);
+    site += `<a href="${encodeURIComponent(file)}">${name}</a>`;
+    site += `${''.padEnd(51 - name.length)}${data.date.slice(0, 10)}${size.padStart(14)}<br>`;
+  }
+  site += '</pre></body><html>';
+
+  fs.writeFileSync(`${process.env.TWCN_SYNC_PATH}/index.html`, site);
+  console.log('Uploading Index');
+  try {
+    await cos.sliceUploadFile({
+      Bucket: process.env.COS_MAP_BUCKET,
+      Region: process.env.COS_REGION,
+      Key: '/',
+      FilePath: `${process.env.TWCN_SYNC_PATH}/index.html`,
+    });
+    console.log(' - Index Uploaded');
+  } catch (e) {
+    console.error(' - Index Upload failed');
+    console.error(e);
   }
 
   console.log('Job finished');
