@@ -3,6 +3,26 @@ import cheerio from 'cheerio';
 import COS from 'cos-nodejs-sdk-v5';
 import fs from 'fs';
 import pb from 'pretty-bytes';
+import crypto from 'crypto';
+import { crc32 } from 'crc';
+
+const checkFile = (file: string) => {
+  try {
+    const data = fs.readFileSync(file);
+    const hash = file.match(/(?:(?:_([0-9a-z]{8}))|(?:_([0-9a-z]{64})))\.map/);
+    if (!hash[1] && !hash[2]) return false;
+    if (hash[2]) {
+      return crypto.createHash('sha256').update(data).digest('hex') == hash[2];
+    }
+
+    if (hash[1]) {
+      return crc32(data).toString(16) == hash[1];
+    }
+    return false;
+  } catch {
+    return false;
+  }
+};
 
 require('dotenv').config();
 
@@ -100,6 +120,12 @@ const job = async () => {
       } catch (e) {
         console.error(' - Download failed');
         console.error(e);
+        continue;
+      }
+
+      console.log(' - Validating');
+      if (!checkFile(`${process.env.TWCN_SYNC_PATH}/${map.filename}`)) {
+        console.warn(` - Map ${map.filename} can not be validated`);
         continue;
       }
 
