@@ -15,7 +15,9 @@ const download = async (map: any) => {
     responseType: 'stream',
   });
 
-  response.data.pipe(fs.createWriteStream(`${process.env.TWCN_SYNC_PATH}/${map.filename}`));
+  const path = `${process.env.TWCN_SYNC_PATH}/${map.filename}`;
+  console.log(` - Downloading to ${path}`);
+  response.data.pipe(fs.createWriteStream(path));
 
   return new Promise<void>((resolve, reject) => {
     response.data.on('end', () => {
