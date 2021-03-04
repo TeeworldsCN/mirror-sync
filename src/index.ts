@@ -161,7 +161,7 @@ const job = async () => {
     await cos.sliceUploadFile({
       Bucket: process.env.COS_MAP_BUCKET,
       Region: process.env.COS_REGION,
-      Key: '/',
+      Key: 'index.html',
       FilePath: `${process.env.TWCN_SYNC_PATH}/index.html`,
     });
     console.log(' - Index Uploaded');
