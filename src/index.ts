@@ -88,7 +88,14 @@ type SourceJob = (bucketMaps: {
 }) => Promise<{ link: string; filename: string }[]>;
 
 const getMapsFromHttp: SourceJob = async bucketMaps => {
-  const mapSource = await axios.get('http://maps.ddnet.tw', { timeout: 60000 });
+  const mapSource = await axios.get('http://maps.ddnet.tw', {
+    headers: {
+      'Accept-Encoding': 'gzip, deflate, br',
+    },
+    responseType: 'text',
+    decompress: true,
+    timeout: 60000,
+  });
 
   const missingMaps: { link: string; filename: string }[] = [];
   const $ = cheerio.load(mapSource.data);
