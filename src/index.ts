@@ -6,6 +6,8 @@ import pb from 'pretty-bytes';
 import crypto from 'crypto';
 import { crc32 } from 'crc';
 
+process.env.TZ = 'Asia/Shanghai';
+
 const checkFile = (file: string) => {
   try {
     const data = fs.readFileSync(file);
@@ -205,6 +207,9 @@ const jobHttp = async () => {
         return;
       }
     }
+
+    console.log('Generateing index.html');
+    await generateIndex(bucketMaps);
   } else {
     console.log('Nothing changed');
   }
@@ -219,9 +224,6 @@ const jobHttp = async () => {
       console.warn(` - Failed to remove file ${map.filename}`);
     }
   }
-
-  console.log('Generateing index.html');
-  await generateIndex(bucketMaps);
 
   console.log('Job finished');
 };
@@ -262,14 +264,14 @@ const jobFs = async () => {
         return;
       }
     }
+
+    console.log('Sync finished');
+
+    console.log('Generateing index.html');
+    await generateIndex(bucketMaps);
   } else {
     console.log('Nothing changed');
   }
-
-  console.log('Sync finished');
-
-  console.log('Generateing index.html');
-  await generateIndex(bucketMaps);
 
   console.log('Job finished');
 };
