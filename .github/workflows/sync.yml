@@ -3,6 +3,7 @@ name: Sync Mirror
 on:
   schedule:
     - cron: '0 4,16 * * *'
+  workflow_dispatch
 
 jobs:
   sync:
