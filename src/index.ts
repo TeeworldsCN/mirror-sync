@@ -193,7 +193,7 @@ const generateBadges = async (bucketMaps: { [key: string]: { date: string; size:
   });
   const syncCountBadge = makeBadge({
     label: '已同步',
-    message: `${bucketMaps.length} 张地图`,
+    message: `${Object.keys(bucketMaps).length} 张地图`,
     color: 'lightgrey',
   });
 
@@ -313,8 +313,8 @@ const jobHttp = async () => {
     console.log('Generateing index.html');
     await generateIndex(bucketMaps);
     console.log('Generateing badges');
-    generateBadges(bucketMaps);
-  } else {
+    await generateBadges(bucketMaps);
+  } else {  
     console.log('Nothing changed');
   }
 
