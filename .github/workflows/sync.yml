@@ -11,12 +11,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run start
         env:
           COS_SECRET: ${{ secrets.COS_SECRET }}
           COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
           COS_MAP_BUCKET: ${{ secrets.COS_MAP_BUCKET }}
           COS_REGION: ${{ secrets.COS_REGION }}
-        with:
-          node-version: 20
-      - run: npm ci
-      - run: npm run start
