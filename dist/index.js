@@ -9,7 +9,9 @@ const fs_1 = __importDefault(require("fs"));
 const pretty_bytes_1 = __importDefault(require("pretty-bytes"));
 const crypto_1 = __importDefault(require("crypto"));
 const crc_1 = require("crc");
+require('dotenv').config();
 process.env.TZ = 'Asia/Shanghai';
+const tmpPath = process.env.TMP_PATH || './tmp';
 const checkFile = (file) => {
     try {
         const data = fs_1.default.readFileSync(file);
@@ -40,7 +42,6 @@ const checkFile = (file) => {
         return { valid: false, reason: 'file error' };
     }
 };
-require('dotenv').config();
 let cos = new cos_nodejs_sdk_v5_1.default({
     SecretId: process.env.COS_SECRET,
     SecretKey: process.env.COS_SECRET_KEY,
@@ -49,7 +50,7 @@ const download = async (map) => {
     const response = await axios_1.default.get(`https://maps.ddnet.org/${encodeURIComponent(map)}`, {
         responseType: 'stream',
     });
-    const path = `${process.env.TWCN_TMP_PATH}/${map}`;
+    const path = `${tmpPath}/${map}`;
     console.log(` - Downloading to ${path}`);
     response.data.pipe(fs_1.default.createWriteStream(path));
     return new Promise((resolve, reject) => {
@@ -127,14 +128,14 @@ const generateIndex = async (bucketMaps) => {
         site += `${''.padEnd(51 - name.length)}${data.date.slice(0, 10)}${size.padStart(14)}<br>`;
     }
     site += '</pre></body><html>';
-    fs_1.default.writeFileSync(`${process.env.TWCN_TMP_PATH}/index.html`, site);
+    fs_1.default.writeFileSync(`${tmpPath}/index.html`, site);
     console.log('Uploading Index');
     try {
         await cos.sliceUploadFile({
             Bucket: process.env.COS_MAP_BUCKET,
             Region: process.env.COS_REGION,
             Key: 'index.html',
-            FilePath: `${process.env.TWCN_TMP_PATH}/index.html`,
+            FilePath: `${tmpPath}/index.html`,
         });
         console.log(' - Index Uploaded');
     }
@@ -162,18 +163,18 @@ const jobHttp = async () => {
                 continue;
             }
             console.log(' - Validating');
-            const validationResult = checkFile(`${process.env.TWCN_TMP_PATH}/${map}`);
+            const validationResult = checkFile(`${tmpPath}/${map}`);
             if (!validationResult?.valid) {
                 console.warn(` - Map ${map} can not be validated:\n     ${validationResult.reason}`);
                 continue;
             }
             try {
-                const stat = fs_1.default.statSync(`${process.env.TWCN_TMP_PATH}/${map}`);
+                const stat = fs_1.default.statSync(`${tmpPath}/${map}`);
                 await cos.sliceUploadFile({
                     Bucket: process.env.COS_MAP_BUCKET,
                     Region: process.env.COS_REGION,
                     Key: map,
-                    FilePath: `${process.env.TWCN_TMP_PATH}/${map}`,
+                    FilePath: `${tmpPath}/${map}`,
                 });
                 console.log(' - Uploaded');
                 bucketMaps[map] = {
@@ -187,7 +188,7 @@ const jobHttp = async () => {
                 return;
             }
             try {
-                fs_1.default.unlinkSync(`${process.env.TWCN_TMP_PATH}/${map}`);
+                fs_1.default.unlinkSync(`${tmpPath}/${map}`);
             }
             catch {
                 console.warn(` - Failed to remove file ${map}`);
