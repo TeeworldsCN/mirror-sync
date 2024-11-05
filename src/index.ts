@@ -314,7 +314,7 @@ const jobHttp = async () => {
     await generateIndex(bucketMaps);
     console.log('Generateing badges');
     await generateBadges(bucketMaps);
-  } else {  
+  } else {
     console.log('Nothing changed');
   }
 

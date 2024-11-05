@@ -8,13 +8,13 @@ This is a script to download the official DDNet maps and uploading them to tence
 
 ## Usage 使用方法
 
-Current our mirror is officially supported by DDNet. If DDNet detected you are in China, it will automatically download maps from our mirror. Therefore, you do not need to do anything to benifit from our mirror.
+Currently our mirror is officially supported by DDNet. If DDNet detected you are in China, it will automatically download maps from our mirror. Therefore, you do not need to do anything to benifit from our mirror.
 
 目前我们的地图镜像为 DDNet 官方镜像。DDNet 客户端若检测到你的网络地区为中国大陆，则会自动从腾讯云的镜像中下载地图。因此你不需要进行任何配置。
 
 ## Report Issues 报告问题
 
-Generally, the script will check the maps' hash and crc value to ensure they are valid before uploading. However, in rare cases, there maybe invalid maps in the mirror, for example:
+Generally, the script will check the maps' hash and crc value to ensure they are valid before uploading to the mirror. However, in rare cases, there maybe invalid maps in the mirror, for example:
 
 - The map is also corrupted in the official repository.
 - One of our developers accidentally uploaded an invalid map during testing.
