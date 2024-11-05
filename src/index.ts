@@ -51,7 +51,6 @@ const download = async (map: any) => {
   });
 
   const path = `${tmpPath}/${map}`;
-  console.log(` - Downloading to ${path}`);
   response.data.pipe(fs.createWriteStream(path));
 
   return new Promise<void>((resolve, reject) => {
@@ -168,24 +167,32 @@ const jobHttp = async () => {
   if (missingMaps.length > 0) {
     console.log(`Prepare to upload ${missingMaps.length} items`);
 
+    let count = 0;
+
     for (let map of missingMaps) {
-      console.log(`Downloading map: ${map}`);
+      console.log(`(${count++}/${missingMaps.length}) Processing map: ${map}`);
+      process.stdout.write(' - downloading');
       try {
         await download(map);
-        console.log(' - Downloaded');
+        process.stdout.write(' ok');
       } catch (e) {
-        console.error(' - Download failed');
-        console.error(e);
+        process.stdout.write(' failed');
+        console.log('');
+        console.error(` - Reason: ${e.message || 'unknown'}`);
         continue;
       }
 
-      console.log(' - Validating');
+      process.stdout.write(' | validating');
       const validationResult = checkFile(`${tmpPath}/${map}`);
       if (!validationResult?.valid) {
-        console.warn(` - Map ${map} can not be validated:\n     ${validationResult.reason}`);
+        process.stdout.write(' failed');
+        console.log('');
+        console.warn(` - Reason: ${validationResult.reason}`);
         continue;
       }
+      process.stdout.write(' ok');
 
+      process.stdout.write(' | uploading');
       try {
         const stat = fs.statSync(`${tmpPath}/${map}`);
         await cos.sliceUploadFile({
@@ -194,22 +201,29 @@ const jobHttp = async () => {
           Key: map,
           FilePath: `${tmpPath}/${map}`,
         });
-        console.log(' - Uploaded');
+        process.stdout.write(' ok');
         bucketMaps[map] = {
           date: new Date().toISOString(),
           size: stat.size,
         };
       } catch (e) {
-        console.error(' - Upload failed');
-        console.error(e);
+        process.stdout.write(' failed');
+        console.log('');
+        console.error(` - Reason: ${e.message || 'unknown'}`);
         return;
       }
 
+      process.stdout.write(' | cleaning up');
       try {
         fs.unlinkSync(`${tmpPath}/${map}`);
-      } catch {
-        console.warn(` - Failed to remove file ${map}`);
+        process.stdout.write(' ok');
+      } catch (e) {
+        process.stdout.write(' failed');
+        console.log('');
+        console.error(` - Reason: ${e.message || 'unknown'}`);
+        return;
       }
+      console.log('');
     }
     console.log('Generateing index.html');
     await generateIndex(bucketMaps);
@@ -228,6 +242,6 @@ jobHttp()
     process.exit(1);
   })
   .then(() => {
-    process.exit(0);
     console.log('Job quit');
+    process.exit(0);
   });
