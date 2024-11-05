@@ -1,32 +1,44 @@
 import axios from 'axios';
-import cheerio from 'cheerio';
 import COS from 'cos-nodejs-sdk-v5';
 import fs from 'fs';
 import pb from 'pretty-bytes';
 import crypto from 'crypto';
 import { crc32 } from 'crc';
 
+require('dotenv').config();
+
 process.env.TZ = 'Asia/Shanghai';
+
+const tmpPath = process.env.TMP_PATH || './tmp';
 
 const checkFile = (file: string) => {
   try {
     const data = fs.readFileSync(file);
     const hash = file.match(/(?:(?:_([0-9a-z]{8}))|(?:_([0-9a-z]{64})))\.map/);
-    if (!hash[1] && !hash[2]) return false;
     if (hash[2]) {
-      return crypto.createHash('sha256').update(data).digest('hex') == hash[2];
+      const actual = crypto.createHash('sha256').update(data).digest('hex');
+      const expected = hash[2];
+      if (actual == expected) {
+        return { valid: true };
+      } else {
+        return { valid: false, reason: `hash mismatch, expected ${expected}, actual ${actual}` };
+      }
     }
 
     if (hash[1]) {
-      return crc32(data).toString(16) == hash[1];
+      const actual = crc32(data).toString(16).padStart(8, '0');
+      const expected = hash[1];
+      if (actual == expected) {
+        return { valid: true };
+      } else {
+        return { valid: false, reason: `crc mismatch, expected ${expected}, actual ${actual}` };
+      }
     }
-    return false;
+    return { valid: false, reason: 'hash not found in filename' };
   } catch {
-    return false;
+    return { valid: false, reason: 'file error' };
   }
 };
-
-require('dotenv').config();
 
 let cos = new COS({
   SecretId: process.env.COS_SECRET,
@@ -34,11 +46,11 @@ let cos = new COS({
 });
 
 const download = async (map: any) => {
-  const response = await axios.get(`https://maps.ddnet.tw/${map.link}`, {
+  const response = await axios.get(`https://maps.ddnet.org/${encodeURIComponent(map)}`, {
     responseType: 'stream',
   });
 
-  const path = `${process.env.TWCN_TMP_PATH}/${map.filename}`;
+  const path = `${tmpPath}/${map}`;
   console.log(` - Downloading to ${path}`);
   response.data.pipe(fs.createWriteStream(path));
 
@@ -85,10 +97,10 @@ const getBucket = async () => {
 
 type SourceJob = (bucketMaps: {
   [key: string]: { date: string; size: number };
-}) => Promise<{ link: string; filename: string }[]>;
+}) => Promise<string[]>;
 
 const getMapsFromHttp: SourceJob = async bucketMaps => {
-  const mapSource = await axios.get('http://maps.ddnet.tw', {
+  const mapSource = await axios.get('http://maps.ddnet.org', {
     headers: {
       'Accept-Encoding': 'gzip, deflate, br',
     },
@@ -97,37 +109,15 @@ const getMapsFromHttp: SourceJob = async bucketMaps => {
     timeout: 60000,
   });
 
-  const missingMaps: { link: string; filename: string }[] = [];
-  const $ = cheerio.load(mapSource.data);
-  $('a').each((_, link) => {
-    const href = $(link).attr('href');
-    let filename;
-
-    try {
-      filename = decodeURIComponent(href);
-    } catch {
-      console.log(`ignoring: ${href}`);
-      return;
-    }
-
-    if (!filename || !filename.endsWith('.map')) return;
-
-    if (!(filename in bucketMaps)) {
-      missingMaps.push({ link: href, filename });
-    }
-  });
-
-  return missingMaps;
-};
-
-const getMapsFromFileSystem: SourceJob = async bucketMaps => {
-  const mapSource = fs.readdirSync(process.env.TWCN_MAP_SOURCE_PATH);
-  const missingMaps: { link: string; filename: string }[] = [];
-  for (let filename of mapSource) {
-    if (!filename || !filename.endsWith('.map')) continue;
-
-    if (!(filename in bucketMaps)) {
-      missingMaps.push({ link: encodeURIComponent(filename), filename });
+  const missingMaps: string[] = [];
+  const maps = mapSource.data.match(/<a href="(.*.map)">/g);
+  if (maps) {
+    for (let map of maps) {
+      const filename = decodeURIComponent(map.match(/<a href="(.*.map)">/)[1]);
+      if (!filename || !filename.endsWith('.map')) continue;
+      if (!(filename in bucketMaps)) {
+        missingMaps.push(filename);
+      }
     }
   }
 
@@ -135,7 +125,7 @@ const getMapsFromFileSystem: SourceJob = async bucketMaps => {
 };
 
 const generateIndex = async (bucketMaps: { [key: string]: { date: string; size: number } }) => {
-  const list: [string, typeof bucketMaps[0]][] = [];
+  const list: [string, (typeof bucketMaps)[0]][] = [];
   for (let key in bucketMaps) {
     list.push([key, bucketMaps[key]]);
   }
@@ -152,14 +142,14 @@ const generateIndex = async (bucketMaps: { [key: string]: { date: string; size: 
   }
   site += '</pre></body><html>';
 
-  fs.writeFileSync(`${process.env.TWCN_TMP_PATH}/index.html`, site);
+  fs.writeFileSync(`${tmpPath}/index.html`, site);
   console.log('Uploading Index');
   try {
     await cos.sliceUploadFile({
       Bucket: process.env.COS_MAP_BUCKET,
       Region: process.env.COS_REGION,
       Key: 'index.html',
-      FilePath: `${process.env.TWCN_TMP_PATH}/index.html`,
+      FilePath: `${tmpPath}/index.html`,
     });
     console.log(' - Index Uploaded');
   } catch (e) {
@@ -179,7 +169,7 @@ const jobHttp = async () => {
     console.log(`Prepare to upload ${missingMaps.length} items`);
 
     for (let map of missingMaps) {
-      console.log(`Downloading map: ${map.filename}`);
+      console.log(`Downloading map: ${map}`);
       try {
         await download(map);
         console.log(' - Downloaded');
@@ -190,21 +180,22 @@ const jobHttp = async () => {
       }
 
       console.log(' - Validating');
-      if (!checkFile(`${process.env.TWCN_TMP_PATH}/${map.filename}`)) {
-        console.warn(` - Map ${map.filename} can not be validated`);
+      const validationResult = checkFile(`${tmpPath}/${map}`);
+      if (!validationResult?.valid) {
+        console.warn(` - Map ${map} can not be validated:\n     ${validationResult.reason}`);
         continue;
       }
 
       try {
-        const stat = fs.statSync(`${process.env.TWCN_TMP_PATH}/${map.filename}`);
+        const stat = fs.statSync(`${tmpPath}/${map}`);
         await cos.sliceUploadFile({
           Bucket: process.env.COS_MAP_BUCKET,
           Region: process.env.COS_REGION,
-          Key: map.filename,
-          FilePath: `${process.env.TWCN_TMP_PATH}/${map.filename}`,
+          Key: map,
+          FilePath: `${tmpPath}/${map}`,
         });
         console.log(' - Uploaded');
-        bucketMaps[map.filename] = {
+        bucketMaps[map] = {
           date: new Date().toISOString(),
           size: stat.size,
         };
@@ -213,8 +204,13 @@ const jobHttp = async () => {
         console.error(e);
         return;
       }
-    }
 
+      try {
+        fs.unlinkSync(`${tmpPath}/${map}`);
+      } catch {
+        console.warn(` - Failed to remove file ${map}`);
+      }
+    }
     console.log('Generateing index.html');
     await generateIndex(bucketMaps);
   } else {
@@ -222,68 +218,10 @@ const jobHttp = async () => {
   }
 
   console.log('Sync finished');
-  console.log('Cleaning temp files');
-
-  for (let map of missingMaps) {
-    try {
-      fs.unlinkSync(`${process.env.TWCN_TMP_PATH}/${map.filename}`);
-    } catch {
-      console.warn(` - Failed to remove file ${map.filename}`);
-    }
-  }
-
   console.log('Job finished');
 };
 
-const jobFs = async () => {
-  console.log('Getting bucket');
-  const bucketMaps = await getBucket();
-
-  console.log('Checking map source');
-  const missingMaps = await getMapsFromFileSystem(bucketMaps);
-
-  if (missingMaps.length > 0) {
-    console.log(`Prepare to upload ${missingMaps.length} items`);
-
-    for (let map of missingMaps) {
-      console.log(` - Validating map: ${map.filename}`);
-      if (!checkFile(`${process.env.TWCN_MAP_SOURCE_PATH}/${map.filename}`)) {
-        console.warn(` - Map ${map.filename} can not be validated`);
-        continue;
-      }
-
-      try {
-        const stat = fs.statSync(`${process.env.TWCN_MAP_SOURCE_PATH}/${map.filename}`);
-        await cos.sliceUploadFile({
-          Bucket: process.env.COS_MAP_BUCKET,
-          Region: process.env.COS_REGION,
-          Key: map.filename,
-          FilePath: `${process.env.TWCN_MAP_SOURCE_PATH}/${map.filename}`,
-        });
-        console.log(' - Uploaded');
-        bucketMaps[map.filename] = {
-          date: new Date().toISOString(),
-          size: stat.size,
-        };
-      } catch (e) {
-        console.error(' - Upload failed');
-        console.error(e);
-        return;
-      }
-    }
-
-    console.log('Sync finished');
-
-    console.log('Generateing index.html');
-    await generateIndex(bucketMaps);
-  } else {
-    console.log('Nothing changed');
-  }
-
-  console.log('Job finished');
-};
-
-jobFs()
+jobHttp()
   .catch(reason => {
     console.error('process failed');
     console.error(reason);
