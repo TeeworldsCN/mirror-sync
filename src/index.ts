@@ -11,6 +11,11 @@ process.env.TZ = 'Asia/Shanghai';
 
 const tmpPath = process.env.TMP_PATH || './tmp';
 
+// How many concurrent downloads
+const DOWNLOAD_BATCH_SIZE = 5;
+// How many maps allowed in the temp folder
+const PROCESS_BATCH_SIZE = 20;
+
 const checkFile = (file: string) => {
   try {
     const data = fs.readFileSync(file);
@@ -45,7 +50,11 @@ let cos = new COS({
   SecretKey: process.env.COS_SECRET_KEY,
 });
 
+const downloadPool = new Map<string, Promise<void>>();
+const downloadingPool = new Set();
+
 const download = async (map: any) => {
+  downloadingPool.add(map);
   const response = await axios.get(`https://maps.ddnet.org/${encodeURIComponent(map)}`, {
     responseType: 'stream',
   });
@@ -55,13 +64,29 @@ const download = async (map: any) => {
 
   return new Promise<void>((resolve, reject) => {
     response.data.on('end', () => {
+      downloadingPool.delete(map);
       resolve();
     });
 
     response.data.on('error', () => {
+      downloadingPool.delete(map);
       reject();
     });
   });
+};
+
+const startDownload = async (map: any) => {
+  const downloadPromise = download(map);
+  downloadPool.set(map, downloadPromise);
+  return downloadPromise;
+};
+
+const waitForDownload = async (map: any) => {
+  const downloadPromise = downloadPool.get(map);
+  if (downloadPromise) {
+    await downloadPromise;
+    downloadPool.delete(map);
+  }
 };
 
 const getBucket = async () => {
@@ -157,6 +182,18 @@ const generateIndex = async (bucketMaps: { [key: string]: { date: string; size: 
   }
 };
 
+const tryStartDownload = (maps: string[], index: number) => {
+  while (
+    index < maps.length &&
+    downloadPool.size < PROCESS_BATCH_SIZE &&
+    downloadingPool.size < DOWNLOAD_BATCH_SIZE
+  ) {
+    const map = maps[index++];
+    startDownload(map);
+  }
+  return index;
+};
+
 const jobHttp = async () => {
   console.log('Getting bucket');
   const bucketMaps = await getBucket();
@@ -168,12 +205,15 @@ const jobHttp = async () => {
     console.log(`Prepare to upload ${missingMaps.length} items`);
 
     let count = 0;
+    let downloadIndex = 0;
 
-    for (let map of missingMaps) {
+    for (let i = 0; i < missingMaps.length; i++) {
+      downloadIndex = tryStartDownload(missingMaps, downloadIndex);
+      const map = missingMaps[i];
       console.log(`(${count++}/${missingMaps.length}) Processing map: ${map}`);
       process.stdout.write(' - downloading');
       try {
-        await download(map);
+        await waitForDownload(map);
         process.stdout.write(' ok');
       } catch (e) {
         process.stdout.write(' failed');
