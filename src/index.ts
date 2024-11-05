@@ -4,6 +4,7 @@ import fs from 'fs';
 import pb from 'pretty-bytes';
 import crypto from 'crypto';
 import { crc32 } from 'crc';
+import { makeBadge } from 'badge-maker';
 
 require('dotenv').config();
 
@@ -157,7 +158,9 @@ const generateIndex = async (bucketMaps: { [key: string]: { date: string; size: 
   list.sort(([_a, a], [_b, b]) => (a.date == b.date ? 0 : a.date > b.date ? -1 : 1));
 
   let site = '<html><head><meta charset="utf-8" /><title>DDNet地图镜像</title></head><body>';
-  site += `<h1>DDNet地图镜像</h1><p>上次同步时间: ${new Date().toLocaleString()}</p><hr><pre>`;
+  site += `<h1>DDNet地图镜像</h1><p>上次同步时间: ${new Date().toLocaleString(
+    'zh-CN'
+  )}</p><hr><pre>`;
   for (let [file, data] of list) {
     const name = file.slice(0, 50);
     const size = pb(data.size);
@@ -178,6 +181,48 @@ const generateIndex = async (bucketMaps: { [key: string]: { date: string; size: 
     console.log(' - Index Uploaded');
   } catch (e) {
     console.error(' - Index Upload failed');
+    console.error(e);
+  }
+};
+
+const generateBadges = async (bucketMaps: { [key: string]: { date: string; size: number } }) => {
+  const lastSyncBadge = makeBadge({
+    label: '上次同步',
+    message: new Date().toLocaleString('zh-CN'),
+    color: 'blue',
+  });
+  const syncCountBadge = makeBadge({
+    label: '已同步',
+    message: `${bucketMaps.length} 张地图`,
+    color: 'lightgrey',
+  });
+
+  fs.writeFileSync(`${tmpPath}/last-sync.svg`, lastSyncBadge);
+  fs.writeFileSync(`${tmpPath}/sync-count.svg`, syncCountBadge);
+
+  try {
+    await cos.sliceUploadFile({
+      Bucket: process.env.COS_MAP_BUCKET,
+      Region: process.env.COS_REGION,
+      Key: 'last-sync.svg',
+      FilePath: `${tmpPath}/last-sync.svg`,
+    });
+    console.log(' - Last Sync Badge Uploaded');
+  } catch (e) {
+    console.error(' - Last Sync Badge Upload Failed');
+    console.error(e);
+  }
+
+  try {
+    await cos.sliceUploadFile({
+      Bucket: process.env.COS_MAP_BUCKET,
+      Region: process.env.COS_REGION,
+      Key: 'sync-count.svg',
+      FilePath: `${tmpPath}/sync-count.svg`,
+    });
+    console.log(' - Sync Count Badge Uploaded');
+  } catch (e) {
+    console.error(' - Sync Count Badge Upload Failed');
     console.error(e);
   }
 };
@@ -204,7 +249,7 @@ const jobHttp = async () => {
   if (missingMaps.length > 0) {
     console.log(`Prepare to upload ${missingMaps.length} items`);
 
-    let count = 0;
+    let count = 1;
     let downloadIndex = 0;
 
     for (let i = 0; i < missingMaps.length; i++) {
@@ -267,6 +312,8 @@ const jobHttp = async () => {
     }
     console.log('Generateing index.html');
     await generateIndex(bucketMaps);
+    console.log('Generateing badges');
+    generateBadges(bucketMaps);
   } else {
     console.log('Nothing changed');
   }
