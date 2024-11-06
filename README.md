@@ -8,7 +8,7 @@ This is a script to download the official DDNet maps and uploading them to tence
 
 ## Usage 使用方法
 
-Currently our mirror is officially supported by DDNet. If DDNet detected you are in China, it will automatically download maps from our mirror. Therefore, you do not need to do anything to benifit from our mirror.
+Currently our mirror is officially supported by DDNet. If DDNet detected you are in China, it will automatically download maps from our mirror. Therefore, you do not need to do anything to benefit from our mirror.
 
 目前我们的地图镜像为 DDNet 官方镜像。DDNet 客户端若检测到你的网络地区为中国大陆，则会自动从腾讯云的镜像中下载地图。因此你不需要进行任何配置。
 
