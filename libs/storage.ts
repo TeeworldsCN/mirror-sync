@@ -7,6 +7,7 @@ import {
 
 import fs from 'fs/promises';
 import { resolve } from 'path';
+import mime from 'mime-types';
 
 const s3 = new S3Client({
   credentials: {
@@ -24,7 +25,8 @@ export const getBucketMapFromBucket = async () => {
     Key: 'maps.json',
   });
   const data = await s3.send(command);
-  return JSON.parse(await data.Body.transformToString());
+  const result = JSON.parse(await data.Body.transformToString());
+  return result;
 };
 
 export const getBucketMap = async () => {
@@ -55,6 +57,7 @@ export const getBucketMap = async () => {
 };
 
 export const upload = async (key: string, data: Buffer | string) => {
+  const type = (!key.endsWith('.map') && mime.lookup(key)) || 'application/octet-stream';
   if (process.env.UPLOAD) {
     // only upload for real if UPLOAD is set
     return await s3.send(
@@ -62,9 +65,14 @@ export const upload = async (key: string, data: Buffer | string) => {
         Bucket: process.env.COS_MAP_BUCKET,
         Key: key,
         Body: data,
+        ContentType: type,
       })
     );
   } else {
-    await fs.writeFile(resolve(process.env.TMP_PATH, key), data);
+    if (typeof data === 'string') {
+      return await fs.writeFile(resolve(process.env.TMP_PATH, key), data);
+    } else {
+      return await fs.writeFile(resolve(process.env.TMP_PATH, key), new DataView(data.buffer));
+    }
   }
 };

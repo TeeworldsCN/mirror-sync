@@ -1,17 +1,13 @@
-import fs from 'fs';
-import pb from 'pretty-bytes';
-import crypto from 'crypto';
-import { crc32 } from 'zlib';
-import { makeBadge } from 'badge-maker';
 import { getBucketMap, getBucketMapFromBucket, upload } from './libs/storage';
 import { listDDNetMaps } from './libs/ddnet';
 import { generateBadges, generateIndex } from './libs/indexing';
+import os from 'os';
 
 require('dotenv').config();
 
 process.env.TZ = 'Asia/Shanghai';
 
-const MAX_WORKERS = 4;
+const MAX_WORKERS = os.cpus().length;
 
 (async () => {
   let bucketMaps: { [key: string]: { date: number; size: number } } = {};
