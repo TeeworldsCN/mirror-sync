@@ -2,9 +2,9 @@
 
 ![Last Sync](https://ddnet-maps-1251829362.file.myqcloud.com/last-sync.svg) ![Sync Count](https://ddnet-maps-1251829362.file.myqcloud.com/sync-count.svg)
 
-This is a script to download the official DDNet maps and uploading them to tencent object storage. We've moved the map mirroring script to Github Actions. The script will run twice a day.
+This is a script to download the official DDNet maps and uploading them to tencent object storage. We've moved the map mirroring script to Github Actions. The script will run every hour.
 
-这是针对大陆玩家的地图镜像同步脚本。该脚本会下载 DDNet 官方地图库并同步至腾讯云对象存储中。我们将地图镜像同步脚本转移到了 Github Actions 上。该脚本会每天运行两次。
+这是针对大陆玩家的地图镜像同步脚本。该脚本会下载 DDNet 官方地图库并同步至腾讯云对象存储中。我们将地图镜像同步脚本转移到了 Github Actions 上。该脚本会每个小时运行一次。
 
 ## Usage 使用方法
 
