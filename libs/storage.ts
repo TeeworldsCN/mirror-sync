@@ -1,4 +1,5 @@
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
@@ -75,4 +76,12 @@ export const upload = async (key: string, data: Buffer | string) => {
       return await fs.writeFile(resolve(process.env.TMP_PATH, key), new DataView(data.buffer));
     }
   }
+};
+
+export const deleteFile = async (key: string) => {
+  const command = new DeleteObjectCommand({
+    Bucket: process.env.COS_MAP_BUCKET,
+    Key: key,
+  });
+  return await s3.send(command);
 };

@@ -13,10 +13,12 @@
   "description": "",
   "license": "ISC",
   "scripts": {
-    "start": "bun run index.ts"
+    "start": "bun run index.ts",
+    "cleanup": "bun cross-env UPLOAD=true bun run cleanup.ts"
   },
   "devDependencies": {
     "@types/bun": "^1.1.14",
-    "@types/mime-types": "^2.1.4"
+    "@types/mime-types": "^2.1.4",
+    "cross-env": "^7.0.3"
   }
 }
