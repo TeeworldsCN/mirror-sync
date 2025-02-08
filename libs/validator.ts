@@ -1,5 +1,3 @@
-import crypto from 'crypto';
-
 export const validate = (filename: string, data: Buffer): { valid: boolean; reason?: string } => {
   try {
     const hash = filename.match(/(?:(?:_([0-9a-z]{8}))|(?:_([0-9a-z]{64})))\.map/);
