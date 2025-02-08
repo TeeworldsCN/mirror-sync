@@ -29,4 +29,3 @@ In such cases, you may experience map loading errors. If you have any problems r
 - 地图在上传过程中发生了数据损坏问题。
 
 在这种情况下，在下载地图时可能会出现报错问题。如果你对地图下载有任何问题，欢迎使用 [创建 Issue](https://github.com/TeeworldsCN/mirror-sync/issues/new) 或者加入 [DDNet Discord](https://ddnet.org/discord) 的方式与我们联系。
-g
