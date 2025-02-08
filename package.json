@@ -4,9 +4,9 @@
   "author": "",
   "main": "index.ts",
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.717.0",
+    "@aws-sdk/client-s3": "^3.744.0",
     "badge-maker": "^4.1.0",
-    "dotenv": "^8.2.0",
+    "dotenv": "^8.6.0",
     "mime-types": "^2.1.35",
     "pretty-bytes": "^5.6.0"
   },
@@ -17,7 +17,7 @@
     "cleanup": "bun cross-env UPLOAD=true bun run cleanup.ts"
   },
   "devDependencies": {
-    "@types/bun": "^1.1.14",
+    "@types/bun": "^1.2.2",
     "@types/mime-types": "^2.1.4",
     "cross-env": "^7.0.3"
   }

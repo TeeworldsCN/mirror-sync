@@ -1,7 +1,7 @@
 export const listDDNetMaps = async (exclude?: { [key: string]: any }) => {
   if (!exclude) exclude = {};
 
-  const mapSource = await fetch('http://maps.ddnet.org', {
+  const mapSource = await fetch('https://maps.ddnet.org', {
     headers: {
       'accept-encoding': 'gzip, deflate, br',
     },
@@ -12,21 +12,23 @@ export const listDDNetMaps = async (exclude?: { [key: string]: any }) => {
     throw new Error(`Failed to fetch maps.ddnet.org: ${mapSource.statusText}`);
   }
 
-  const page = await mapSource.text();
+  const maps: string[] = [];
 
-  const list: string[] = [];
-  const maps = page.match(/<a href="(.*.map)">/g);
-  if (maps) {
-    for (let map of maps) {
-      const filename = decodeURIComponent(map.match(/<a href="(.*.map)">/)[1]);
-      if (!filename || !filename.endsWith('.map')) continue;
-      if (!(filename in exclude)) {
-        list.push(filename);
+  const rewriter = new HTMLRewriter().on('a', {
+    element(a) {
+      const href = a.getAttribute('href');
+      if (href && href.endsWith('.map')) {
+        const filename = decodeURIComponent(href);
+        if (!filename.endsWith('.map')) return;
+        if (!(filename in exclude)) {
+          maps.push(filename);
+        }
       }
     }
-  }
+  });
 
-  return list;
+  rewriter.transform(await mapSource.text());
+  return maps;
 };
 
 export const downloadDDNetMap = async (map: any): Promise<Buffer> => {
